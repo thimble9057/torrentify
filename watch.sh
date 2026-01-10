@@ -1,29 +1,45 @@
 #!/bin/sh
 set -e
 
-WATCH_DIR="/data/films"
-SCRIPT="/app/scene-maker.js"
-EXT="mkv|mp4|avi|mov|flv|wmv|m4v"
+ENABLE_FILMS="${ENABLE_FILMS:-false}"
+ENABLE_SERIES="${ENABLE_SERIES:-false}"
 
-trap "exit 0" TERM INT
+watch_dir() {
+  DIR="$1"
+  LABEL="$2"
 
-echo "👀 Surveillance active : $WATCH_DIR"
-node "$SCRIPT"
+  echo "👀 Surveillance activée pour $LABEL : $DIR"
 
-RUNNING=0
+  inotifywait -m -r \
+    -e create -e moved_to -e close_write \
+    --format '%f' \
+    "$DIR" | while read file
+  do
+    case "$file" in
+      *.mkv|*.mp4|*.avi|*.mov|*.flv|*.wmv|*.m4v)
+        echo "🎬 Nouveau fichier détecté ($LABEL) : $file"
+        node /app/scene-maker.js
+        ;;
+    esac
+  done
+}
 
-inotifywait -m -r \
-  --event close_write,move,create \
-  --format '%w%f' \
-  "$WATCH_DIR" | while read FILE
-do
-  echo "$FILE" | grep -Ei "\.($EXT)$" >/dev/null || continue
-  [ "$RUNNING" -eq 1 ] && continue
-  RUNNING=1
+# -------- SCAN INITIAL --------
+echo "🚀 Scan initial au démarrage"
+node /app/scene-maker.js
+# ------------------------------
 
-  (
-    sleep 5
-    node "$SCRIPT"
-    RUNNING=0
-  ) &
-done
+if [ "$ENABLE_FILMS" = "true" ]; then
+  watch_dir "/data/films" "films" &
+fi
+
+if [ "$ENABLE_SERIES" = "true" ]; then
+  watch_dir "/data/series" "series" &
+fi
+
+if [ "$ENABLE_FILMS" != "true" ] && [ "$ENABLE_SERIES" != "true" ]; then
+  echo "❌ Aucun dossier surveillé (ENABLE_FILMS / ENABLE_SERIES)"
+  exit 1
+fi
+
+wait

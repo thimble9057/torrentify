@@ -1,23 +1,34 @@
 services:
-  scene-script:
-    image: scene-script:1.3
-    build: .
-    container_name: scene-script
+  torrentify:
+    image: monuser/torrentify:latest
+    container_name: torrentify
     restart: unless-stopped
 
     environment:
+      # Permissions (Unraid / Linux)
       PUID: 1000
       PGID: 1000
 
-      # Séparés par des virgules
-      TRACKERS: >
-        https://tracker1/announce,
-        https://tracker2/announce
+      # Activation des médias
+      ENABLE_FILMS: "true"
+      ENABLE_SERIES: "false"
 
-      # Optionnel : clé api TMDb
-      # TMDB_API_KEY: votre_cle_api_tmdb_ici
+      # TMDb
+      TMDB_API_KEY: votre_cle_tmdb
+
+      # Trackers (séparés par virgules)
+      TRACKERS: https://tracker1/announce,https://tracker2/announce
+
+      # Optionnel
+      PARALLEL_JOBS: 1
 
     volumes:
+      # Entrées
       - /mnt/user/data/films:/data/films
-      - /mnt/user/data/test:/data/torrent
-      - /mnt/user/data/test/cache_tmdb:/data/cache_tmdb
+      - /mnt/user/data/series:/data/series
+
+      # Sorties
+      - /mnt/user/data/torrent:/data/torrent
+
+      # Cache TMDb
+      - /mnt/user/data/cache_tmdb:/data/cache_tmdb
