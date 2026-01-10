@@ -109,3 +109,4 @@ Un fichier vidéo = un torrent.
 Les fichiers déjà traités ne sont jamais régénérés.
 
 Compatible Unraid, NAS, VPS, Raspberry Pi.
+# trigger
