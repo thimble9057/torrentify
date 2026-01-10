@@ -72,8 +72,10 @@ Il surveille un ou plusieurs dossiers de vidéos, analyse les noms de fichiers, 
         ├── Nom.Serie.torrent
         ├── Nom.Serie.nfo
         └── Nom.Serie.txt
+```
+##🚀 Exemple docker-compose
 
-🚀 Exemple docker-compose
+```yaml
 version: "3.8"
 
 services:
@@ -96,3 +98,5 @@ services:
       - /mnt/user/data/series:/data/series
       - /mnt/user/data/torrent:/data/torrent
       - /mnt/user/data/cache_tmdb:/data/cache_tmdb
+```
+
