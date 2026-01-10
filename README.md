@@ -72,3 +72,27 @@ Il surveille un ou plusieurs dossiers de vidéos, analyse les noms de fichiers, 
         ├── Nom.Serie.torrent
         ├── Nom.Serie.nfo
         └── Nom.Serie.txt
+
+🚀 Exemple docker-compose
+version: "3.8"
+
+services:
+  torrentify:
+    image: thimble9057/torrentify:latest
+    container_name: torrentify
+    restart: unless-stopped
+
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TMDB_API_KEY: votre_cle_tmdb
+      TRACKERS: https://tracker1/announce,https://tracker2/announce
+      ENABLE_FILMS: "true"
+      ENABLE_SERIES: "false"
+      PARALLEL_JOBS: 1
+
+    volumes:
+      - /mnt/user/data/films:/data/films
+      - /mnt/user/data/series:/data/series
+      - /mnt/user/data/torrent:/data/torrent
+      - /mnt/user/data/cache_tmdb:/data/cache_tmdb
