@@ -49,7 +49,8 @@ const startTime = Date.now();
 
 // ---------------------- UTIL ----------------------
 const safeName = name => name.replace(/ /g, '.');
-const cleanTitle = title => title.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+const cleanTitle = title =>
+  String(title || '').replace(/[^a-zA-Z0-9 ]/g, '').trim();
 
 const isVideoFile = f =>
   VIDEO_EXT.includes(path.extname(f).slice(1).toLowerCase());
