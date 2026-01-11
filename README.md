@@ -104,7 +104,7 @@ services:
 Les séries sont traitées exactement comme les films
 (pas de gestion saison/épisode spécifique).
 
-Un fichier vidéo = un torrent.
+Un fichier/dossier vidéo = un torrent.
 
 Les fichiers déjà traités ne sont jamais régénérés.
 
