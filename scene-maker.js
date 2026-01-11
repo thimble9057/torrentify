@@ -32,16 +32,8 @@ const TRACKERS = (process.env.TRACKERS || '').split(',').map(t => t.trim()).filt
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const PARALLEL_JOBS = Math.max(1, parseInt(process.env.PARALLEL_JOBS || '1', 10));
 
-if (!TRACKERS.length) {
-  console.error('❌ Aucun tracker défini');
-  process.exit(1);
-}
-if (!TMDB_API_KEY) {
-  console.error('❌ TMDB_API_KEY non défini');
-  process.exit(1);
-}
-if (!MEDIA_CONFIG.length) {
-  console.error('❌ Aucun type de média activé (ENABLE_FILMS / ENABLE_SERIES)');
+if (!TRACKERS.length || !TMDB_API_KEY || !MEDIA_CONFIG.length) {
+  console.error('❌ Configuration invalide');
   process.exit(1);
 }
 
@@ -59,19 +51,16 @@ const startTime = Date.now();
 const safeName = name => name.replace(/ /g, '.');
 const cleanTitle = title => title.replace(/[^a-zA-Z0-9 ]/g, '').trim();
 
+const isVideoFile = f =>
+  VIDEO_EXT.includes(path.extname(f).slice(1).toLowerCase());
+
 function execAsync(cmd, args = []) {
   return new Promise((resolve, reject) => {
     const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '';
-    let err = '';
-
+    let out = '', err = '';
     p.stdout.on('data', d => out += d);
     p.stderr.on('data', d => err += d);
-
-    p.on('close', code => {
-      if (code === 0) resolve(out);
-      else reject(new Error(err || `Commande échouée: ${cmd}`));
-    });
+    p.on('close', code => code === 0 ? resolve(out) : reject(err));
   });
 }
 
@@ -82,6 +71,7 @@ function formatDuration(ms) {
   return `${h}h ${m % 60}m ${s % 60}s`;
 }
 
+// ---------------------- TMDB ----------------------
 async function runPythonGuessit(filePath) {
   try {
     const out = await execAsync('python3', ['-c', `
@@ -99,31 +89,9 @@ print(json.dumps({'title': f.get('title',''), 'year': f.get('year','')}))
 async function searchTMDb(title, year, language) {
   const query = qs.escape(cleanTitle(title));
   const url = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${query}&language=${language}`;
-
   try {
     const res = await axios.get(url);
-    if (!res.data.results?.length) return null;
-
-    let results = res.data.results;
-    if (year) {
-      const filtered = results.filter(r => r.release_date?.startsWith(year.toString()));
-      if (filtered.length) results = filtered;
-    }
-
-    let best = null;
-    let bestScore = 0;
-
-    for (const r of results) {
-      const score = stringSimilarity.compareTwoStrings(
-        cleanTitle(title).toLowerCase(),
-        (r.title || '').toLowerCase()
-      );
-      if (score > bestScore) {
-        best = r;
-        bestScore = score;
-      }
-    }
-    return best;
+    return res.data.results?.[0] || null;
   } catch {
     return null;
   }
@@ -132,11 +100,7 @@ async function searchTMDb(title, year, language) {
 async function getCachedMovie(title, year, language) {
   const key = safeName(`${title}_${year}_${language}`).toLowerCase();
   const file = path.join(CACHE_DIR, key + '.json');
-
-  if (fs.existsSync(file)) {
-    try { return JSON.parse(fs.readFileSync(file)); } catch {}
-  }
-
+  if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file));
   const movie = await searchTMDb(title, year, language);
   if (movie) fs.writeFileSync(file, JSON.stringify(movie, null, 2));
   return movie;
@@ -151,15 +115,13 @@ function getMktorrentL(file) {
   return 24;
 }
 
-// ---------------------- PROCESS ----------------------
-async function processFile(file, index, total, destBase) {
-  const nameNoExt = path.parse(file).name;
-  const safeFolder = safeName(nameNoExt);
-  const outDir = path.join(destBase, safeFolder);
-
-  const nfo = path.join(outDir, `${safeFolder}.nfo`);
-  const torrent = path.join(outDir, `${safeFolder}.torrent`);
-  const txt = path.join(outDir, `${safeFolder}.txt`);
+// ---------------------- PROCESS FILE ----------------------
+async function processFile(file, destBase, index, total, label) {
+  const name = safeName(path.parse(file).name);
+  const outDir = path.join(destBase, name);
+  const nfo = path.join(outDir, `${name}.nfo`);
+  const torrent = path.join(outDir, `${name}.torrent`);
+  const txt = path.join(outDir, `${name}.txt`);
 
   if (fs.existsSync(nfo) && fs.existsSync(torrent) && fs.existsSync(txt)) {
     skipped++;
@@ -167,90 +129,74 @@ async function processFile(file, index, total, destBase) {
     return;
   }
 
-  console.log(`📊 Traitement ${index}/${total} → ${path.basename(file)}`);
+  console.log(`📊 ${label} ${index}/${total} → ${path.basename(file)}`);
+  fs.mkdirSync(outDir, { recursive: true });
 
-  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-
-  if (!fs.existsSync(nfo)) {
-    let mediadata = await execAsync('mediainfo', [file]);
-    mediadata = mediadata.replace(
-      /^Complete name\s*:.*$/m,
-      `Complete name : ${path.basename(file)}`
-    );
-
-    fs.writeFileSync(nfo, `
-============================================================
-Release Name : ${nameNoExt}
-Added On    : ${new Date().toISOString().replace('T',' ').split('.')[0]}
-============================================================
-
-${mediadata}
-
-============================================================
-Generated by torrentify
-============================================================
-`.trim());
-  }
+  if (!fs.existsSync(nfo))
+    fs.writeFileSync(nfo, await execAsync('mediainfo', [file]));
 
   if (!fs.existsSync(torrent)) {
     const trackers = TRACKERS.flatMap(t => ['-a', t]);
-    await execAsync('mktorrent', [
-      '-l', getMktorrentL(file).toString(),
-      '-p',
-      ...trackers,
-      '-o', torrent,
-      file
-    ]);
+    await execAsync('mktorrent', ['-l', getMktorrentL(file), ...trackers, '-o', torrent, file]);
   }
 
   if (!fs.existsSync(txt)) {
-    const guess = await runPythonGuessit(file);
-
-    const movie =
-      await getCachedMovie(guess.title, guess.year, 'en-US') ||
-      await getCachedMovie(guess.title, guess.year, 'fr-FR') ||
-      await getCachedMovie(guess.title, '', 'en-US');
-
-    if (movie?.id) {
+    const g = await runPythonGuessit(file);
+    const m = await getCachedMovie(g.title, g.year, 'en-US');
+    if (m?.id) {
       tmdbFound++;
-      fs.writeFileSync(txt, `ID TMDB : ${movie.id}\n`);
+      fs.writeFileSync(txt, `TMDB:${m.id}`);
     } else {
       tmdbMissing++;
-      fs.writeFileSync(txt, `TMDb non trouvé\n`);
-      console.log(`⚠️ TMDb non trouvé : ${guess.title}`);
+      fs.writeFileSync(txt, 'TMDB not found');
+      console.log(`⚠️ TMDb non trouvé : ${g.title}`);
     }
   }
 
   processed++;
 }
 
-// ---------------------- PARALLEL ----------------------
-async function runWithLimit(files, limit, destBase) {
-  let index = 0;
-  const running = new Set();
+// ---------------------- SERIES FOLDER ----------------------
+async function processSeriesFolder(folder, destBase, index, total) {
+  const videos = await fg(VIDEO_EXT.map(e => `${folder}/**/*.${e}`));
+  if (!videos.length) return;
 
-  for (const file of files) {
-    index++;
-    const p = processFile(file, index, files.length, destBase);
+  const name = safeName(path.basename(folder));
+  const outDir = path.join(destBase, name);
+  const torrent = path.join(outDir, `${name}.torrent`);
+
+  if (fs.existsSync(torrent)) {
+    skipped++;
+    console.log(`⏭️ Déjà traité (dossier) : ${name}`);
+    return;
+  }
+
+  console.log(`📊 Série ${index}/${total} → ${name} (${videos.length} fichiers)`);
+
+  fs.mkdirSync(outDir, { recursive: true });
+  const trackers = TRACKERS.flatMap(t => ['-a', t]);
+  await execAsync('mktorrent', ['-l', 22, ...trackers, '-o', torrent, folder]);
+
+  processed++;
+}
+
+// ---------------------- PARALLEL ----------------------
+async function runTasks(tasks, limit) {
+  const running = new Set();
+  for (const t of tasks) {
+    const p = t();
     running.add(p);
     p.finally(() => running.delete(p));
-
-    if (running.size >= limit) {
-      await Promise.race(running);
-    }
+    if (running.size >= limit) await Promise.race(running);
   }
   await Promise.all(running);
 }
 
 // ---------------------- MAIN ----------------------
 (async () => {
-  for (const media of MEDIA_CONFIG) {
-    const files = await fg(VIDEO_EXT.map(e => `${media.source}/**/*.${e}`));
+  console.log('🚀 Scan initial au démarrage');
 
-    if (!files.length) {
-      console.log(`ℹ️ Aucun fichier ${media.name} à traiter`);
-      continue;
-    }
+  for (const media of MEDIA_CONFIG) {
 
     console.log(
       PARALLEL_JOBS === 1
@@ -258,7 +204,48 @@ async function runWithLimit(files, limit, destBase) {
         : `⚡ ${media.name} : mode parallèle (${PARALLEL_JOBS} jobs)`
     );
 
-    await runWithLimit(files, PARALLEL_JOBS, media.dest);
+    //  FILMS
+    if (media.name === 'films') {
+      const files = await fg(VIDEO_EXT.map(e => `${media.source}/**/*.${e}`));
+      let i = 0;
+      const total = files.length;
+
+      await runTasks(
+        files.map(f => () => processFile(f, media.dest, ++i, total, 'Film')),
+        PARALLEL_JOBS
+      );
+    }
+
+    //  SERIES
+    if (media.name === 'series') {
+      const entries = fs.readdirSync(media.source, { withFileTypes: true });
+      const tasks = [];
+      let i = 0;
+      const total = entries.length;
+
+      for (const e of entries) {
+        const full = path.join(media.source, e.name);
+
+        if (e.isFile() && isVideoFile(e.name)) {
+          tasks.push(() =>
+            processFile(full, media.dest, ++i, total, 'Série fichier')
+          );
+        }
+
+        if (e.isDirectory()) {
+          tasks.push(() =>
+            processSeriesFolder(full, media.dest, ++i, total)
+          );
+        }
+      }
+
+      if (!tasks.length) {
+        console.log('ℹ️ Aucun contenu série à traiter');
+        continue;
+      }
+
+      await runTasks(tasks, PARALLEL_JOBS);
+    }
   }
 
   const totalTime = Date.now() - startTime;
