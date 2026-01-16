@@ -13,7 +13,7 @@ watch_dir() {
   inotifywait -m -r \
     -e create -e moved_to -e close_write \
     --format '%f' \
-    "$DIR" | while read file
+    "$DIR" 2>/dev/null | while read file
   do
     case "$file" in
       *.mkv|*.mp4|*.avi|*.mov|*.flv|*.wmv|*.m4v)
@@ -30,11 +30,11 @@ node /app/scene-maker.js
 # ------------------------------
 
 if [ "$ENABLE_FILMS" = "true" ]; then
-  watch_dir "/data/films" "films" &
+  watch_dir "/films" "films" &
 fi
 
 if [ "$ENABLE_SERIES" = "true" ]; then
-  watch_dir "/data/series" "series" &
+  watch_dir "/series" "series" &
 fi
 
 if [ "$ENABLE_FILMS" != "true" ] && [ "$ENABLE_SERIES" != "true" ]; then

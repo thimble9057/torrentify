@@ -3,12 +3,10 @@ services:
     image: monuser/torrentify:latest
     container_name: torrentify
     restart: unless-stopped
+    
+    user: "1000:1000"
 
     environment:
-      # Permissions (Unraid / Linux)
-      PUID: 1000
-      PGID: 1000
-
       # Activation des médias
       ENABLE_FILMS: "true"
       ENABLE_SERIES: "false"
@@ -28,7 +26,4 @@ services:
       - /mnt/user/data/series:/data/series
 
       # Sorties
-      - /mnt/user/data/torrent:/data/torrent
-
-      # Cache TMDb
-      - /mnt/user/data/cache_tmdb:/data/cache_tmdb
+      - /mnt/user/data/torrent:/data
