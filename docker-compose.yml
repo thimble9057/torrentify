@@ -1,6 +1,6 @@
 services:
   torrentify:
-    image: monuser/torrentify:latest
+    image: thimble9057/torrentify:latest
     container_name: torrentify
     restart: unless-stopped
     
@@ -22,8 +22,8 @@ services:
 
     volumes:
       # Entrées
-      - /mnt/user/data/films:/data/films
-      - /mnt/user/data/series:/data/series
+      - /mnt/user/data/films:/films
+      - /mnt/user/data/series:/series
 
       # Sorties
       - /mnt/user/data/torrent:/data
