@@ -102,8 +102,8 @@ services:
 
     volumes:
       # Entrées
-      - /source/films:/data/films
-      - /source/series:/data/series
+      - /source/films:/films
+      - /source/series:/series
 
       # Sorties
       - /destination/torrent:/data
