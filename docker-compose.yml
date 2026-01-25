@@ -1,0 +1,32 @@
+services:
+  torrentify:
+    image: thimble9057/torrentify:latest
+    container_name: torrentify
+    restart: unless-stopped
+    
+    user: "1000:1000"
+
+    environment:
+      # Activation des médias
+      ENABLE_FILMS: "true"
+      ENABLE_SERIES: "false"
+      ENABLE_MUSIQUES: "true"
+
+
+      # TMDb
+      TMDB_API_KEY: votre_cle_tmdb
+
+      # Trackers (séparés par virgules)
+      TRACKERS: https://tracker1/announce,https://tracker2/announce
+
+      # Optionnel
+      PARALLEL_JOBS: 1
+
+    volumes:
+      # Entrées
+      - /mnt/user/data/films:/films
+      - /mnt/user/data/series:/series
+      - /mnt/user/data/musiques:/musiques
+
+      # Sorties
+      - /mnt/user/data/torrent:/data
