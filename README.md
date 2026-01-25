@@ -1,11 +1,11 @@
 # 🧲 Torrentify
 
 **Torrentify** est un conteneur Docker qui génère automatiquement des fichiers  
-**.torrent**, **.nfo** et des métadonnées **TMDb** à partir de **films et de séries**.
+**.torrent**, **.nfo** et des métadonnées **TMDb / iTunes** à partir de **films, séries et musiques**.
 
 Il surveille un ou plusieurs dossiers de vidéos, analyse les noms de fichiers,
-récupère les informations depuis **TMDb** et prépare des fichiers propres et prêts
-à l’usage pour les **trackers privés** depuis une machine **Unraid**, **NAS** et **seedbox**.
+récupère les informations depuis **TMDb** (films & séries) et **iTunes** (musiques),
+et prépare des fichiers propres et prêts à l’usage pour les **trackers privés** depuis une machine **Unraid**, **NAS** et **seedbox**.
 
 ---
 
@@ -16,13 +16,14 @@ récupère les informations depuis **TMDb** et prépare des fichiers propres et 
 - 🛠️ Mise à jour des **Trackers** via `mkbrr`
 - 📝 Création de fichiers `.nfo` propres (sans chemins absolus)
 - 📄 Fichier `.txt` avec ID TMDb ou message explicite si non trouvé
-- 👀 Surveillance en temps réel des dossiers **films et/ou séries**
+- 👀 Surveillance en temps réel des dossiers **films, séries et musiques**
 - 🔄 Scan initial automatique au démarrage du conteneur
 - 🔍 Scan récursif des sous-dossiers
 - 🧠 Analyse intelligente des noms de fichiers (GuessIt)
-- 🎞️ Recherche TMDb avec cache local
-- ⚙️ Activation indépendante des **films** et des **séries**
-- 📁 Sortie structurée par type (films / séries)
+- 🎞️ Recherche **TMDb/iTunes** avec cache local
+- 📦 Cache auto-recréé si supprimé ou corrompu
+- ⚙️ Activation indépendante des **films**, **séries** et des **musiques**
+- 📁 Sortie structurée par type (films / séries / musiques)
 - 🐳 Image Docker légère basée sur Alpine
 - 🧱 Compatible multi-architecture (`amd64` / `arm64`)
 
@@ -36,9 +37,10 @@ récupère les informations depuis **TMDb** et prépare des fichiers propres et 
 | `TRACKERS` | URLs des trackers (séparées par des virgules) |
 | `ENABLE_FILMS` | Active le traitement et la surveillance des films (`true` / `false`) |
 | `ENABLE_SERIES` | Active le traitement et la surveillance des séries (`true` / `false`) |
+| `ENABLE_MUSIQUES` | Active le traitement et la surveillance des musiques (`true` / `false`) |
 | `PARALLEL_JOBS` | Nombre de fichiers traités en parallèle (défaut : `1`) |
 
-> ⚠️ **Au moins un des deux** (`ENABLE_FILMS` ou `ENABLE_SERIES`) doit être activé.
+> ⚠️ **Au moins un des trois** (`ENABLE_FILMS` ou `ENABLE_SERIES` ou `ENABLE_MUSIQUES`) doit être activé.
 
 ---
 
@@ -49,6 +51,7 @@ récupère les informations depuis **TMDb** et prépare des fichiers propres et 
 |-----------------|------------|
 | `/films` | Dossier des films (optionnel) |
 | `/series` | Dossier des séries (optionnel) |
+| `/musiques` | Dossier des musiques (optionnel) |
 
 ### 📤 Sortie
 | Chemin conteneur | Description |
@@ -71,8 +74,15 @@ data/
 │       ├── Nom.Serie.torrent
 │       ├── Nom.Serie.nfo
 │       └── Nom.Serie.txt
+├── musiques/
+│   └── Nom.Album/
+│       ├── Nom.Album.torrent
+│       ├── Nom.Album.nfo
+│       └── Nom.Album.txt
 ├── cache_tmdb
 │   └── X.json
+├── cache_itunes/
+│   └── *.json
 └── trackers.fingerprint.sha256 <-- fingerprint variable `TRACKERS`
 ```
 ## 🚀 Exemple docker-compose
@@ -90,6 +100,7 @@ services:
       # Activation des médias
       ENABLE_FILMS: "true"
       ENABLE_SERIES: "false"
+      ENABLE_MUSIQUES: "true"
 
       # TMDb
       TMDB_API_KEY: votre_cle_tmdb
@@ -104,6 +115,7 @@ services:
       # Entrées
       - /source/films:/films
       - /source/series:/series
+      - /source/musiques:/musiques
 
       # Sorties
       - /destination/torrent:/data
@@ -113,6 +125,7 @@ services:
 Les séries sont traitées exactement comme les films
 (pas de gestion saison/épisode spécifique).
 
-Un fichier/dossier vidéo = un torrent.
+Un fichier ou dossier = un torrent
 
 Les fichiers déjà traités ne sont jamais régénérés.
+Les caches API sont persistants et auto-réparés
